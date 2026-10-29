@@ -45,6 +45,58 @@ git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git
 
 再在 `cordis.patch.yml` 里加 `llm-pi-ai` 的 provider 路由（见下文「在 DSH 里使用」）。
 
+## 在另一台电脑部署（工作机）
+
+### 前置条件
+
+| 条件 | 说明 |
+|---|---|
+| DSH 桌面版已安装 | 反代跑在 DSH 进程内，**不需要单独装 Node** |
+| `dsh-connect-workbuddy` 已装并**已登录** | 反代读它写的账号保险库 `$DSH_HOME/workbuddy-vault/`；没登录就没有凭证，转发会 401 |
+| 能访问 GitHub | clone 或下载 zip 均可 |
+
+### 四步
+
+```powershell
+# 1) 拿到源码
+git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git C:\tools\dsh-workbuddy-proxy
+#   （或下载 zip 解压到任意目录）
+
+# 2) 跑安装器（幂等，可重复执行）
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\tools\dsh-workbuddy-proxy\scripts\install-windows.ps1 `
+  -PluginDir C:\tools\dsh-workbuddy-proxy -Profile desktop -Port 14577
+
+# 3) 重启 DSH（路由和插件都在启动时读）
+
+# 4) 验证
+curl http://127.0.0.1:14577/healthz
+```
+
+安装器做四件事，全部幂等：
+
+1. 在 `<profile>/package.json` 里声明依赖（`link:` 到源码目录）+ 加进 `dsh.profile.bundles`；
+2. 在 `<profile>/node_modules/` 建 junction（Windows 目录链接，不用跑 pnpm install）；
+3. 在 `<profile>/cordis.patch.yml` 的 `llm-pi-ai.providers` 下插入 `workbuddyproxy` 路由；
+4. 在 `$DSH_HOME/workbuddy-proxy-fingerprints.json` 写入已知指纹。
+
+同时会检查账号保险库是否存在，缺了就提示「去登录 WorkBuddy 插件，或从已登录的机器复制 `workbuddy-vault` 目录」。
+
+### 之后怎么用
+
+- 模型选择器里选名字带 **`(Proxy)`** 的条目（provider = `workbuddyproxy`）；
+- 也可以把默认模型切到反代：`<profile>/cordis.patch.yml` 里 `agent-default-model` 的 `provider` 改成 `workbuddyproxy`；
+- 想改回官方通道：把 `provider` 改回 `workbuddy` 即可。
+
+### 工作机常见坑
+
+| 现象 | 原因 / 处理 |
+|---|---|
+| `AuthorizationManager 检查失败` | PowerShell 执行策略拦截 → 加 `-ExecutionPolicy Bypass` |
+| 每轮都 `MISSING_CREDENTIAL` | provider 用了 `apiKeyEnv`（宿主解析不到）。本插件的路由用的是 `headers.Authorization`，若你手改过请改回来 |
+| 反代起不来 / 端口被占 | 换一个 `-Port`（同时路由和插件配置会一起改）；或关掉占用该端口的旧实例 |
+| `healthz` 返回 `no-credential` | WorkBuddy 插件没登录，保险库是空的 |
+| 中文脚本乱码 | 脚本必须存成 **UTF-8 带 BOM**（仓库里的已带） |
+
 ## 快速开始
 
 ```bash
