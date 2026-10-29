@@ -1,0 +1,22 @@
+# dsh-workbuddy-proxy bundle patch
+#
+# 本插件在宿主进程内起一台**本机 HTTP 反代**：
+#
+#   http://127.0.0.1:<port>/v1     （OpenAI 兼容）
+#
+# 它把 DSH 的请求清洗一遍再发给 WorkBuddy 网关，绕开上游的「渠道校验」
+# （11128）。清洗规则由 $DSH_HOME/workbuddy-proxy-fingerprints.json 驱动，
+# 新词条会在运行时自动二分定位并入库。
+#
+# 模型路由由 profile 的 llm-pi-ai provider（workbuddyproxy）指向本机端口。
+
+- insert:
+    - id: dsh-workbuddy-proxy
+      name: dsh-workbuddy-proxy
+      config:
+        host: 127.0.0.1
+        port: 14577
+        region: cn
+        # 收到渠道校验拒绝时，自动二分定位被禁的句子并入库（每次约十几次网关调用）
+        autoBisect: true
+        maxProbes: 24

@@ -1,0 +1,70 @@
+{
+  "name": "dsh-workbuddy-proxy",
+  "version": "0.1.0",
+  "description": "本机反代：在 DSH 与 WorkBuddy 网关之间加一层可控的请求清洗，绕开上游的渠道校验（11128），并把 WorkBuddy 模型以 OpenAI 兼容接口暴露给任意客户端。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./server": "./lib/server.js",
+    "./sanitize": "./lib/sanitize.js",
+    "./fingerprints": "./lib/fingerprints.js",
+    "./diagnose": "./lib/diagnose.js",
+    "./upstream": "./lib/upstream.js",
+    "./credentials": "./lib/credentials.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-workbuddy-proxy": "bin/proxy.js"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "test",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/proxy.js",
+    "seed": "node bin/seed-fingerprints.mjs",
+    "probe": "node test/probe.mjs",
+    "check": "node --check lib/index.js && node --check lib/server.js && node --check lib/sanitize.js && node --check lib/fingerprints.js && node --check lib/diagnose.js && node --check lib/upstream.js && node --check lib/credentials.js"
+  },
+  "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "workbuddy",
+    "reverse-proxy",
+    "openai-compatible",
+    "proxy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+github.com:0aibin0/dsh-workbuddy-proxy.git"
+  },
+  "homepage": "https://github.com/0aibin0/dsh-workbuddy-proxy#readme",
+  "bugs": {
+    "url": "https://github.com/0aibin0/dsh-workbuddy-proxy/issues"
+  },
+  "author": "0aibin0",
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "install": {
+      "preferred": "tarball",
+      "tarball": "https://github.com/0aibin0/dsh-workbuddy-proxy/releases/latest/download/dsh-workbuddy-proxy-0.1.0.tgz",
+      "git": "git@github.com:0aibin0/dsh-workbuddy-proxy.git"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  }
+}
