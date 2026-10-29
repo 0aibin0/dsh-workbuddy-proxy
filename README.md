@@ -71,6 +71,8 @@ git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git C:\tools\dsh-workbuddy-
 C:\tools\dsh-workbuddy-proxy\install.bat
 #   可选参数：
 #     install.bat -Profile desktop -Port 14577 -DshHome C:\Users\me\.dsh
+#     install.bat -Vault C:\Users\other\.dsh\workbuddy-vault   ← 从已登录机器导入账号库
+#       （-Vault 也可以给上一级 .dsh 目录，脚本会自动识别）
 
 # 3) 重启 DSH（路由和插件都在启动时读）
 
@@ -107,7 +109,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\tools\dsh-workbuddy-proxy
 | `AuthorizationManager 检查失败` | PowerShell 执行策略拦截 → 加 `-ExecutionPolicy Bypass` |
 | 每轮都 `MISSING_CREDENTIAL` | provider 用了 `apiKeyEnv`（宿主解析不到）。本插件的路由用的是 `headers.Authorization`，若你手改过请改回来 |
 | 反代起不来 / 端口被占 | 换一个 `-Port`（同时路由和插件配置会一起改）；或关掉占用该端口的旧实例 |
-| `healthz` 返回 `no-credential` | WorkBuddy 插件没登录，保险库是空的 |
+| `healthz` 返回 `no-credential` | WorkBuddy 插件**装了但没登录**——它只在登录后才写 `workbuddy-vault`，空目录等于没凭证 | 在本机登录一次；或从已登录机器导入：`install.bat -Vault C:\Users\other\.dsh\workbuddy-vault`（也可以给上一级 `.dsh` 目录） |
 | 中文脚本乱码 | 脚本必须存成 **UTF-8 带 BOM**（仓库里的已带） |
 
 ## 快速开始
