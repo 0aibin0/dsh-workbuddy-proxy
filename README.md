@@ -45,6 +45,8 @@ git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git
 
 再在 `cordis.patch.yml` 里加 `llm-pi-ai` 的 provider 路由（见下文「在 DSH 里使用」）。
 
+> 不想手工接线的话：直接跑仓库根目录的 **`install.bat`**（Windows 一键安装，自动用脚本自身所在目录作为安装路径，见下文「在另一台电脑部署」）。
+
 ## 在另一台电脑部署（工作机）
 
 ### 前置条件
@@ -57,19 +59,30 @@ git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git
 
 ### 四步
 
+> **最快路径**：把整个仓库下载/克隆到**任意目录**，然后**双击仓库根目录的 `install.bat`**。
+> 安装目录自动取脚本自身所在目录，所以下载到哪儿都行；脚本会用 `chcp 65001` 保证中文不乱码。
+
 ```powershell
-# 1) 拿到源码
+# 1) 拿到源码（放到你想要的目录）
 git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git C:\tools\dsh-workbuddy-proxy
 #   （或下载 zip 解压到任意目录）
 
-# 2) 跑安装器（幂等，可重复执行）
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\tools\dsh-workbuddy-proxy\scripts\install-windows.ps1 `
-  -PluginDir C:\tools\dsh-workbuddy-proxy -Profile desktop -Port 14577
+# 2) 一键安装：双击 install.bat，或命令行执行
+C:\tools\dsh-workbuddy-proxy\install.bat
+#   可选参数：
+#     install.bat -Profile desktop -Port 14577 -DshHome C:\Users\me\.dsh
 
 # 3) 重启 DSH（路由和插件都在启动时读）
 
 # 4) 验证
 curl http://127.0.0.1:14577/healthz
+```
+
+也可以直接调 PowerShell 脚本（BAT 内部就是调它）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\tools\dsh-workbuddy-proxy\scripts\install-windows.ps1 `
+  -PluginDir C:\tools\dsh-workbuddy-proxy -Profile desktop -Port 14577
 ```
 
 安装器做四件事，全部幂等：
