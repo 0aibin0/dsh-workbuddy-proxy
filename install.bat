@@ -33,6 +33,7 @@ if not exist "%PS1%" (
 set "PROFILE=desktop"
 set "PORT=14577"
 set "DSHHOME="
+set "VAULT="
 
 :parse
 if "%~1"=="" goto run
@@ -54,6 +55,12 @@ if /i "%~1"=="-DshHome" (
   shift
   goto parse
 )
+if /i "%~1"=="-Vault" (
+  set "VAULT=%~2"
+  shift
+  shift
+  goto parse
+)
 if /i "%~1"=="-h" goto usage
 if /i "%~1"=="--help" goto usage
 echo   [WARN] unknown argument: %~1
@@ -62,6 +69,7 @@ goto parse
 
 :usage
 echo   usage: install.bat [-Profile desktop] [-Port 14577] [-DshHome C:\Users\me\.dsh]
+echo                       [-Vault C:\path\to\workbuddy-vault]
 echo.
 pause
 exit /b 0
@@ -70,10 +78,12 @@ exit /b 0
 echo   profile    : %PROFILE%
 echo   port       : %PORT%
 if not "%DSHHOME%"=="" echo   dsh home   : %DSHHOME%
+if not "%VAULT%"=="" echo   vault from : %VAULT%
 echo.
 
 set "PS_ARGS=-NoProfile -ExecutionPolicy Bypass -File "%PS1%" -PluginDir "%ROOT%" -Profile "%PROFILE%" -Port "%PORT%""
 if not "%DSHHOME%"=="" set "PS_ARGS=%PS_ARGS% -DshHome "%DSHHOME%""
+if not "%VAULT%"=="" set "PS_ARGS=%PS_ARGS% -Vault "%VAULT%""
 
 powershell %PS_ARGS%
 set "RC=%ERRORLEVEL%"

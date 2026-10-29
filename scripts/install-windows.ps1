@@ -26,7 +26,8 @@ param(
   [string]$PluginDir = (Split-Path -Parent $PSScriptRoot),
   [string]$Profile = 'desktop',
   [string]$DshHome = $(if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }),
-  [int]$Port = 14577
+  [int]$Port = 14577,
+  [string]$Vault = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -187,17 +188,36 @@ if (Test-Path -LiteralPath $fpPath) {
 
 # ---------------------------------------------------------------- 6. account vault
 Step "checking the WorkBuddy account vault"
-$vault = Join-Path $DshHome 'workbuddy-vault'
+$vaultDir = Join-Path $DshHome 'workbuddy-vault'
+
+# 6a. 可选：从另一台机器导入账号库（无法在本机登录时用）
+if ($Vault -ne '') {
+  $src = (Resolve-Path -LiteralPath $Vault).Path
+  $srcVault = if (Test-Path -LiteralPath (Join-Path $src 'workbuddy-vault')) { Join-Path $src 'workbuddy-vault' } else { $src }
+  $have = @(Get-ChildItem -LiteralPath $srcVault -Recurse -Filter *.json -ErrorAction SilentlyContinue).Count
+  if ($have -eq 0) {
+    Warn2 "no *.json under $srcVault - nothing imported"
+  } else {
+    New-Item -ItemType Directory -Path $vaultDir -Force | Out-Null
+    Copy-Item -Path (Join-Path $srcVault '*') -Destination $vaultDir -Recurse -Force
+    Ok "imported $have account record(s) from $srcVault"
+  }
+}
+
 $found = $false
-if (Test-Path -LiteralPath $vault) {
-  $found = @(Get-ChildItem -LiteralPath $vault -Recurse -Filter *.json -ErrorAction SilentlyContinue).Count -gt 0
+if (Test-Path -LiteralPath $vaultDir) {
+  $found = @(Get-ChildItem -LiteralPath $vaultDir -Recurse -Filter *.json -ErrorAction SilentlyContinue).Count -gt 0
 }
 if ($found) {
   Ok "vault found - the proxy can forward"
 } else {
-  Warn2 "no account vault under $vault"
-  Note "install and sign in the dsh-connect-workbuddy plugin on this machine first,"
-  Note "or copy $DshHome\workbuddy-vault from a machine that is already signed in."
+  Warn2 "no account vault under $vaultDir"
+  Note "the dsh-connect-workbuddy plugin only writes the vault AFTER you sign in."
+  Note "do this on this machine:"
+  Note "  a) open the WorkBuddy plugin in DSH and sign in with the account; or"
+  Note "  b) copy the vault from a signed-in machine and re-run with -Vault <that path>:"
+  Note "     install.bat -Vault C:\Users\other\.dsh\workbuddy-vault"
+  Note "     (the proxy forwards with that account; the tokens refresh themselves)"
 }
 
 Write-Host ""
