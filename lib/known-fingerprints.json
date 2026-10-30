@@ -1,0 +1,84 @@
+{
+  "version": 2,
+  "supersedes": ["dsh-repository-file-tools"],
+  "items": [
+    {
+      "id": "dsh-host-identity",
+      "mode": "rewrite",
+      "replace": "You are an AI agent running inside DeepSeek Harness",
+      "text": "You are an AI agent powered by DeepSeek Harness"
+    },
+    {
+      "id": "dsh-file-reference-1",
+      "mode": "rewrite",
+      "replace": "Paths that begin with @ are the ones the user explicitly referenced.",
+      "text": "Tokens prefixed with @ are paths the user explicitly referenced."
+    },
+    {
+      "id": "dsh-file-reference-2",
+      "mode": "rewrite",
+      "replace": "Relative paths are resolved against the workspace root;",
+      "text": "Relative paths resolve from the workspace root;"
+    },
+    {
+      "id": "dsh-file-reference-3",
+      "mode": "rewrite",
+      "replace": "absolute paths point at files or directories on the host.",
+      "text": "absolute paths identify files or directories on the host."
+    },
+    {
+      "id": "dsh-file-reference-4",
+      "mode": "rewrite",
+      "replace": "A trailing slash indicates a directory:",
+      "text": "A trailing slash marks a directory:"
+    },
+    {
+      "id": "dsh-file-reference-5",
+      "mode": "rewrite",
+      "replace": "list it whenever its contents matter.",
+      "text": "list it when its contents matter."
+    },
+    {
+      "id": "dsh-file-reference-6",
+      "mode": "rewrite",
+      "replace": "Everything else is a file:",
+      "text": "Anything else is a file:"
+    },
+    {
+      "id": "dsh-file-reference-7",
+      "mode": "rewrite",
+      "replace": "use the read tool whenever you need its contents,",
+      "text": "use the read tool when its contents are needed,"
+    },
+    {
+      "id": "dsh-file-reference-8",
+      "mode": "rewrite",
+      "replace": "and never claim to have inspected it before reading it.",
+      "text": "and do not claim to have inspected it before reading."
+    },
+    {
+      "id": "dsh-file-reference-9",
+      "mode": "rewrite",
+      "replace": "A path containing spaces is quoted with @\"...\".",
+      "text": "@\"...\" quotes a path containing spaces."
+    },
+    {
+      "id": "dsh-web-gui-channel",
+      "mode": "rewrite",
+      "replace": "You are working with the user inside the DeepSeek Harness Web GUI",
+      "text": "You are interacting with the user through the DeepSeek Harness Web GUI"
+    },
+    {
+      "id": "dsh-agent-teams-channel",
+      "mode": "rewrite",
+      "replace": "Agent Teams is enabled for this session",
+      "text": "Agent Teams is available in this session"
+    },
+    {
+      "id": "dsh-coding-agent-channel",
+      "mode": "rewrite",
+      "replace": "You are a coding agent running on the",
+      "text": "You are a coding agent powered by the"
+    }
+  ]
+}

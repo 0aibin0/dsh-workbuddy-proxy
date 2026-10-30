@@ -166,25 +166,76 @@ if (Test-Path -LiteralPath $pluginPatch) {
 }
 
 # ---------------------------------------------------------------- 5. fingerprint library
-Step "seeding the fingerprint library"
+# 词表在仓库里（lib/known-fingerprints.json，单一事实来源），这里只负责**合并**：
+# 同 id 就地更新、新 id 追加、用户自己加的条目保留、仓库取代掉的旧 id 移除。
+#
+# 旧实现是「文件存在就跳过」—— 已安装的用户永远拿不到新词条，而闸门是会变的
+# （2026-10-30 就实测出宿主身份句这条新闸门，漏掉它 = 整轮 400）。
+Step "syncing the fingerprint library"
 $fpPath = Join-Path $DshHome 'workbuddy-proxy-fingerprints.json'
+$knownPath = Join-Path $PluginDir 'lib\known-fingerprints.json'
+if (-not (Test-Path -LiteralPath $knownPath)) { throw "missing fingerprint list: $knownPath" }
+
+$knownDoc = Get-Content -LiteralPath $knownPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$knownItems = @($knownDoc.items)
+$superseded = @()
+if ($knownDoc.PSObject.Properties.Name -contains 'supersedes') { $superseded = @($knownDoc.supersedes) }
+
+$doc = @{ version = 2; items = @() }
 if (Test-Path -LiteralPath $fpPath) {
-  Note "already present - skipped"
-} else {
-  $fp = @{
-    version = 1
-    items   = @(
-      @{
-        id   = 'dsh-repository-file-tools'
-        mode = 'tag'
-        text = 'Tokens prefixed with @ are paths the user explicitly referenced. Relative paths resolve from the workspace root; absolute paths identify files or directories on the host. A trailing slash marks a directory: list it when its contents matter. Anything else is a file: use the read tool when its contents are needed, and do not claim to have inspected it before reading. @"..." quotes a path containing spaces.'
+  try {
+    $parsed = Get-Content -LiteralPath $fpPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $kept = @()
+    if ($null -ne $parsed -and ($parsed.PSObject.Properties.Name -contains 'items')) {
+      foreach ($it in @($parsed.items)) {
+        if ($null -eq $it) { continue }
+        if ($superseded -contains [string]$it.id) { continue }
+        $kept += $it
       }
-    )
+    }
+    $doc = @{ version = 2; items = $kept }
+  } catch {
+    Warn2 "existing fingerprint file is not valid JSON - it will be replaced"
+    $doc = @{ version = 2; items = @() }
   }
-  $json = $fp | ConvertTo-Json -Depth 6
-  [System.IO.File]::WriteAllText($fpPath, ($json + "`n"), (New-Object System.Text.UTF8Encoding($false)))
-  Ok "written: $fpPath"
 }
+
+$byId = @{}
+$texts = @{}
+foreach ($it in @($doc.items)) {
+  $byId[[string]$it.id] = $it
+  $texts[[string]$it.text] = $true
+}
+
+$added = 0
+$updated = 0
+foreach ($k in $knownItems) {
+  $entry = @{ id = [string]$k.id; mode = [string]$k.mode; text = [string]$k.text }
+  if (($k.PSObject.Properties.Name -contains 'replace') -and [string]$k.replace -ne '') {
+    $entry['replace'] = [string]$k.replace
+  }
+  if ($byId.ContainsKey([string]$k.id)) {
+    $old = $byId[[string]$k.id]
+    $old | Add-Member -NotePropertyName 'mode' -NotePropertyValue $entry.mode -Force
+    $old | Add-Member -NotePropertyName 'text' -NotePropertyValue $entry.text -Force
+    if ($entry.ContainsKey('replace')) {
+      $old | Add-Member -NotePropertyName 'replace' -NotePropertyValue $entry['replace'] -Force
+    } elseif ($old.PSObject.Properties.Name -contains 'replace') {
+      $old.PSObject.Properties.Remove('replace')
+    }
+    $updated += 1
+    continue
+  }
+  if ($texts.ContainsKey([string]$k.text)) { continue }
+  $doc.items = @($doc.items) + $entry
+  $byId[[string]$k.id] = $entry
+  $texts[[string]$k.text] = $true
+  $added += 1
+}
+
+$json = $doc | ConvertTo-Json -Depth 6
+[System.IO.File]::WriteAllText($fpPath, ($json + "`n"), (New-Object System.Text.UTF8Encoding($false)))
+Ok "fingerprints synced: $($doc.items.Count) item(s) (+$added new, ~$updated updated) -> $fpPath"
 
 # ---------------------------------------------------------------- 6. account vault
 Step "checking the WorkBuddy account vault"
