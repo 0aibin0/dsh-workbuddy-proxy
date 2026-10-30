@@ -8,7 +8,7 @@ DSH  →  http://127.0.0.1:14577/v1  →  dsh-workbuddy-proxy  →  https://copi
 
 ## 为什么需要它
 
-WorkBuddy 网关会扫描每一条 `system` / `assistant` 消息的**内容**，命中它内部的「渠道」词表就返回 `11128`。2026-10-29 实测：被禁的既不是账号也不是积分，而是 **DSH 宿主系统提示词里的一句工具说明**（"Tokens prefixed with @ are paths the user explicitly referenced…"）。
+WorkBuddy 网关会扫描每一条 `system` / `assistant` 消息的**内容**，命中它内部的「渠道」词表就返回 `11128`。2026-10-29/30 实测：被禁的既不是账号也不是积分，而是 **DSH 宿主系统提示词里的句子**。
 
 网关的匹配是「空白归一化 + 字母逐字」的**精确子串**，所以：
 
@@ -16,7 +16,36 @@ WorkBuddy 网关会扫描每一条 `system` / `assistant` 消息的**内容**，
 - 改一个字母、或删掉整句 → **立刻放行**；
 - 只是在句**前**加个 `Note: ` → **无效**（子串还在）。
 
-本插件因此做三件事：剥壳、把命中句**在句中打断**、撞到新词条时**自动二分测出来并入库**。
+本插件因此做三件事：剥壳、把命中句**在句中打断**或**整段改写**、撞到新词条时**自动二分测出来并入库**。
+
+### 闸门是「位置无关」的（2026-10-30 实测）
+
+网关匹配的是**内容里的任何一处**，不只是消息开头。官方连接插件 `dsh-connect-workbuddy` 的实测词表
+（`lib/host-heartbeat-*.js` 的 `CHANNEL_GATE_PHRASES`）里明确写着：
+
+> `from` strings are matched **ANYWHERE, not just at an opening**, because the measured rule is position-independent.
+
+所以「在句首垫一行中性头」这类挡法**对身份句无效** —— 原句还在句中。
+
+### 实测到的两条硬闸门
+
+裸打上游（`copilot.tencent.com`，不走本反代）逐条测：
+
+| 内容 | 结果 |
+|---|---|
+| `You are an AI agent powered by DeepSeek Harness`（宿主身份句，来自 `@deepseek-ai/dsh-system-prompt`） | **11128** |
+| `Tokens prefixed with @ are paths the user explicitly referenced.` + `Relative paths resolve from the workspace root;`（**两句凑齐**，来自 `@deepseek-ai/dsh-file-reference`） | **11128** |
+| 上面任何一句**单独**发 | 200 |
+
+要点：
+
+1. **闸门在宿主系统提示词里，不在工具调用描述里** —— 身份句才是那条最狠的。
+2. 触发形状可能是**多句**：@ 路径段单独一句是 200，前两句凑齐才 11128。所以词条粒度必须细到
+   「宿主把这段截断了也照样命中」，否则整段指纹匹配不上、闸门照样命中。
+3. 这两条闸门来自 DSH 宿主的三个包：`@deepseek-ai/dsh-system-prompt`（身份句）、
+   `@deepseek-ai/dsh-file-reference`（@ 路径段）、`@deepseek-ai/dsh-harness-dev-context`（Web GUI 段）。
+
+### `developer` 角色
 
 还有一类完全不同的拒绝：**只要消息里出现 `developer` 角色，网关就回 11128**，与内容无关——干净文本照样被拒：
 
@@ -25,7 +54,19 @@ WorkBuddy 网关会扫描每一条 `system` / `assistant` 消息的**内容**，
 {role:"system",…} + {role:"developer",…}         -> BLOCK
 ```
 
-pi-ai 在工具增删时会生成 `developer` 消息，所以本插件把它统一改写成 `system`（官方连接插件也是这么做的）。漏掉这一步的表现很迷惑：四档重试全灭，而自愈二分什么也找不到——因为内容本身没问题。
+pi-ai 在工具增删时会生成 `developer` 消息，**而且 DSH 平时就是这么把系统提示词发过来的** ——
+所以线上最常见的一轮实际只有两条消息：
+
+```
+{role:"developer", content:"<宿主系统提示词>"} + {role:"user", content:"…"}
+```
+
+本插件把它统一改写成 `system`（官方连接插件也是这么做的）。漏掉这一步的表现很迷惑：四档重试全灭，
+而自愈二分什么也找不到——因为内容本身没问题。
+
+> 连带修掉的一个坑：自愈二分（`discoverBannedLines`）拿的是**原始** body，里面的 `developer`
+> 角色从没被改写过，于是被「只扫 system/assistant」的过滤器整条跳过 —— 二分永远在空集里找。
+> 现在 `scansOpening()` 也认 `developer`，新词条才真能自愈。
 
 ## 安装
 
@@ -101,9 +142,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\tools\dsh-workbuddy-proxy
 1. 在 `<profile>/package.json` 里声明依赖（`link:` 到源码目录）+ 加进 `dsh.profile.bundles`；
 2. 在 `<profile>/node_modules/` 建 junction（Windows 目录链接，不用跑 pnpm install）；
 3. 在 `<profile>/cordis.patch.yml` 的 `llm-pi-ai.providers` 下插入 `workbuddyproxy` 路由；
-4. 在 `$DSH_HOME/workbuddy-proxy-fingerprints.json` 写入已知指纹。
+4. 在 `$DSH_HOME/workbuddy-proxy-fingerprints.json` **合并**已知指纹（同 id 就地更新、新 id 追加、
+   你自己加的条目保留、仓库取代掉的旧 id 移除）。
 
 同时会检查账号保险库是否存在，缺了就提示「去登录 WorkBuddy 插件，或从已登录的机器复制 `workbuddy-vault` 目录」。
+
+> 第 4 步是**合并**而不是「文件存在就跳过」：闸门词表会变，已装过的机器也必须能拿到新词条，
+> 否则一次新闸门就能让整轮 400。
 
 ### 之后怎么用
 
@@ -124,7 +169,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\tools\dsh-workbuddy-proxy
 ## 快速开始
 
 ```bash
-# 1) 写入已知指纹（已实测的那句）
+# 1) 写入已知指纹（词表在 lib/known-fingerprints.json）
 node bin/seed-fingerprints.mjs
 
 # 2) 独立跑反代（不依赖 DSH）
@@ -135,6 +180,9 @@ curl http://127.0.0.1:14577/healthz
 
 # 4) 探针：直连网关 vs 走反代
 node test/probe.mjs --model glm-5.3-flash
+
+# 5) 回归测试（不需要账号，纯本地）
+npm test
 ```
 
 在 DSH 里使用时，provider 路由这样写（**不要写 `apiKeyEnv`**，见下）：
@@ -175,18 +223,31 @@ node test/probe.mjs --model glm-5.3-flash
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "items": [
-    { "id": "dsh-repository-file-tools", "mode": "tag",
-      "text": "Tokens prefixed with @ are paths the user explicitly referenced. …" }
+    { "id": "dsh-host-identity", "mode": "rewrite",
+      "text": "You are an AI agent powered by DeepSeek Harness",
+      "replace": "You are an AI agent running inside DeepSeek Harness" },
+    { "id": "dsh-file-reference-1", "mode": "rewrite",
+      "text": "Tokens prefixed with @ are paths the user explicitly referenced.",
+      "replace": "Paths that begin with @ are the ones the user explicitly referenced." }
   ]
 }
 ```
 
 - `mode: "tag"` → 在句中插 ` (note)` 打断精确子串（默认）
 - `mode: "remove"` → 整句删除
+- `mode: "rewrite"` → 整段换成 `replace` 给的另一套措辞（字节变了 = 子串匹配失效；语义还在 = 不像删句那样伤上下文）。`replace` 为空时自动降级成 `tag`
 
-可以随时手改。撞到新词条时，反代会**运行时自愈**：用同一请求文本做行级二分（≤`maxProbes` 次探测）找出被禁句，写进本文件并重发。
+仓库里的已知词表在 **`lib/known-fingerprints.json`（单一事实来源）**，`bin/seed-fingerprints.mjs`、
+`scripts/install-windows.ps1` 和 `test/sanitize.spec.mjs` 都读它，不会各写一份而漂移。
+
+可以随时手改。**指纹库每次请求按 mtime 重读磁盘** —— 改完立刻生效，**不用重启 DSH**，
+这是线上被拒时最快的止血旋钮（加一条 rewrite 或 tag 即可）。
+
+撞到新词条时，反代会**运行时自愈**：用同一请求文本做行级二分（≤`maxProbes` 次探测）找出被禁句，写进本文件并重发。
+
+> 词条要**逐句**写，不要写整段：触发形状可能是段落的前两句，宿主把这段截断后整段指纹就匹配不上。
 
 ## 配置项
 
@@ -202,6 +263,22 @@ node test/probe.mjs --model glm-5.3-flash
 
 直接读官方连接插件的账号保险库：`$DSH_HOME/workbuddy-vault/<region>/<accountId>.json`
 （`auth.accessToken` / `auth.refreshToken` / `auth.domain` / `account.uid`）。token 过期时自动刷新并回写保险库。
+
+## 开发
+
+```bash
+npm test        # 回归测试（node:test，无外部依赖，不需要账号）
+npm run check  # 语法检查
+```
+
+改闸门规则时只改 `lib/known-fingerprints.json`（**单一事实来源**），不要在 `bin/` 或 `scripts/` 里另写一份：
+`bin/seed-fingerprints.mjs` 与 `test/sanitize.spec.mjs` 读它，`scripts/install-windows.ps1` 也直接读那个 JSON。
+
+`test/sanitize.spec.mjs` 锁住了 2026-10-30 实测出来的三个缺陷：
+
+1. `scansOpening()` 必须覆盖 `developer` —— 否则自愈二分在空集里找，新闸条来了也救不回来；
+2. 闸门是**位置无关**的 —— neutral-head 档挡不住宿主身份句；
+3. 词表必须包含宿主身份句，且**逐句**粒度能覆盖被截断的触发形状（整段指纹匹配不上截断段）。
 
 ## 许可
 
