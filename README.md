@@ -126,12 +126,12 @@ git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git
 ```bash
 # 1) 装进 profile（自动写 dependencies + dsh.profile.bundles）
 dsh plugin --profile desktop add \
-  "https://github.com/0aibin0/dsh-workbuddy-proxy/releases/latest/download/dsh-workbuddy-proxy-0.1.2.tgz"
+  "https://github.com/0aibin0/dsh-workbuddy-proxy/releases/latest/download/dsh-workbuddy-proxy-0.1.3.tgz"
 
 # 2) 重启 DSH，然后在模型选择器里选带 (Proxy) 的条目
 ```
 
-**剩下的接线插件自己在启动时做完**（`lib/self-register.js`，0.1.2 起）：
+**剩下的接线插件自己在启动时做完**（`lib/self-register.js`，0.1.3 起）：
 
 | 缺什么 | 插件自动补什么 | 补完之后 |
 |---|---|---|
@@ -144,7 +144,7 @@ dsh plugin --profile desktop add \
 
 > 实测（2026-10-30）：在只有 `@deepseek-ai/dsh-base` 的干净 profile 上，
 > `dsh plugin add` 之后 patch 仍是空数组 `[]`、DSH_HOME 下也没有指纹库 ——
-> 也就是说旧版必须手工改 YAML 才能用。0.1.2 起这两步由插件自己完成。
+> 也就是说旧版必须手工改 YAML 才能用。0.1.3 起这两步由插件自己完成。
 
 ### 另一条路：仓库 + 一键安装脚本
 

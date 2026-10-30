@@ -22,6 +22,8 @@ import {
   detectProfileDir,
   ensureFingerprints,
   ensureProviderRoute,
+  homeFromProfileDir,
+  resolveHome,
   vaultStatus,
 } from "../lib/self-register.js";
 import { KNOWN_FINGERPRINTS } from "../lib/known-fingerprints.js";
@@ -166,19 +168,59 @@ test("保险库缺失/存在都能如实报告", () => {
   assert.equal(status.accounts, 1);
 });
 
-test("detectProfileDir 能从启动参数认出 profile", () => {
-  const home = "C:\\Users\\me\\.dsh";
+test("真实宿主形态：cwd 就是 profile 目录，env/argv 都没有线索", () => {
+  // 2026-10-30 用 inspector 进真实宿主进程实测：
+  //   cwd 就是 profile 目录（<DSH_HOME>/profiles/desktop）
+  //   DSH_HOME 与 DSH_PROFILE_DIR 都是 null
+  //   argv 里只有 app 目录和 runtime 目录，没有 profile 路径
   const dir = detectProfileDir(
-    { DSH_HOME: home },
-    ["node", "host.js", "C:\\Users\\me\\.dsh\\profiles\\desktop", "other"],
+    {},
+    ["node", "host.js", "C:/app/dsh", "C:/app/runtime/primary-runtime"],
+    "C:/Users/me/.dsh/profiles/desktop",
   );
-  assert.equal(path.normalize(dir), path.normalize("C:\\Users\\me\\.dsh\\profiles\\desktop"));
+  assert.equal(path.normalize(dir), path.normalize("C:/Users/me/.dsh/profiles/desktop"));
 });
 
-test("detectProfileDir 优先用 DSH_PROFILE_DIR", () => {
+test("DSH_PROFILE_DIR 存在时优先采用", () => {
   const dir = detectProfileDir(
-    { DSH_HOME: "C:\\Users\\me\\.dsh", DSH_PROFILE_DIR: "D:\\custom\\profile" },
+    { DSH_PROFILE_DIR: "D:/custom/profile" },
     [],
+    "C:/Users/me/.dsh/profiles/desktop",
   );
-  assert.equal(path.normalize(dir), path.normalize("D:\\custom\\profile"));
+  assert.equal(path.normalize(dir), path.normalize("D:/custom/profile"));
+});
+
+test("cwd 不是 profile 目录时回落到 argv", () => {
+  const dir = detectProfileDir(
+    { DSH_HOME: "C:/Users/me/.dsh" },
+    ["node", "host.js", "C:/Users/me/.dsh/profiles/headless"],
+    "C:/some/other/place",
+  );
+  assert.equal(path.normalize(dir), path.normalize("C:/Users/me/.dsh/profiles/headless"));
+});
+
+test("什么线索都没有时返回 undefined（不乱写）", () => {
+  const dir = detectProfileDir({ DSH_HOME: "C:/Users/me/.dsh" }, ["node", "x.js"], "C:/tmp");
+  assert.equal(dir, undefined);
+});
+
+test("真实宿主 DSH_HOME 为空时，从 profile 目录反推 home", () => {
+  // 实测：真实宿主进程里 DSH_HOME / DSH_PROFILE_DIR 都是 null。
+  // 这时若直接用 dshHome() 会落到 ~/.dsh —— 用户把 DSH_HOME 设到别处就写错地方。
+  const profile = "C:/Users/me/.dsh/profiles/desktop";
+  assert.equal(path.normalize(homeFromProfileDir(profile)), path.normalize("C:/Users/me/.dsh"));
+  assert.equal(path.normalize(resolveHome({}, profile)), path.normalize("C:/Users/me/.dsh"));
+});
+
+test("显式 DSH_HOME 优先于 profile 反推", () => {
+  const home = resolveHome(
+    { DSH_HOME: "D:/other/home" },
+    "C:/Users/me/.dsh/profiles/desktop",
+  );
+  assert.equal(path.normalize(home), path.normalize("D:/other/home"));
+});
+
+test("profile 目录形状不对时 homeFromProfileDir 返回 undefined", () => {
+  assert.equal(homeFromProfileDir("C:/somewhere/else"), undefined);
+  assert.equal(homeFromProfileDir(undefined), undefined);
 });
