@@ -116,12 +116,39 @@ git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git
 |---|---|
 | DSH 桌面版已安装 | 反代跑在 DSH 进程内，**不需要单独装 Node** |
 | `dsh-connect-workbuddy` 已装并**已登录** | 反代读它写的账号保险库 `$DSH_HOME/workbuddy-vault/`；没登录就没有凭证，转发会 401 |
-| 能访问 GitHub | clone 或下载 zip 均可 |
+| 能访问 GitHub / 公司代理放行 | release tarball 或 git clone 二选一 |
 
-### 四步
+> 第 2 条是**唯一必须自己搞定**的一步：账号凭证只能在 WorkBuddy 插件里登录后才有，
+> 本插件不会、也不该替你登录。反代起不来不是它的问题，`healthz` 会明说 `no-credential`。
 
-> **最快路径**：把整个仓库下载/克隆到**任意目录**，然后**双击仓库根目录的 `install.bat`**。
-> 安装目录自动取脚本自身所在目录，所以下载到哪儿都行；脚本会用 `chcp 65001` 保证中文不乱码。
+### 两步（推荐：插件管理器）
+
+```bash
+# 1) 装进 profile（自动写 dependencies + dsh.profile.bundles）
+dsh plugin --profile desktop add \
+  "https://github.com/0aibin0/dsh-workbuddy-proxy/releases/latest/download/dsh-workbuddy-proxy-0.1.2.tgz"
+
+# 2) 重启 DSH，然后在模型选择器里选带 (Proxy) 的条目
+```
+
+**剩下的接线插件自己在启动时做完**（`lib/self-register.js`，0.1.2 起）：
+
+| 缺什么 | 插件自动补什么 | 补完之后 |
+|---|---|---|
+| `<profile>/cordis.patch.yml` 里没有 `workbuddyproxy` 路由 | 往 `llm-pi-ai.providers` 下写 6 个模型的路由 | 模型选择器里出现 `(Proxy)` 条目 |
+| `$DSH_HOME/workbuddy-proxy-fingerprints.json` 不存在 | 用仓库词表种子（13 条，含宿主身份句） | 不会因为身份句直接被 11128 |
+| 账号保险库缺失 | **不补**，只在日志里告警 | 需要你先装 `dsh-connect-workbuddy` 并登录 |
+
+自注册的边界很明确：**只在缺失时写，已经存在就一个字都不改**（你手改过的配置不会被覆盖）。
+第一次启动补完路由后需要再重启一次，`llm-pi-ai` 才会读到新 provider。
+
+> 实测（2026-10-30）：在只有 `@deepseek-ai/dsh-base` 的干净 profile 上，
+> `dsh plugin add` 之后 patch 仍是空数组 `[]`、DSH_HOME 下也没有指纹库 ——
+> 也就是说旧版必须手工改 YAML 才能用。0.1.2 起这两步由插件自己完成。
+
+### 另一条路：仓库 + 一键安装脚本
+
+适合要改源码、或想完全手工控制的情况：
 
 ```powershell
 # 1) 拿到源码（放到你想要的目录）
