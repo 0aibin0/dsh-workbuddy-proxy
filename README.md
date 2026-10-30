@@ -71,12 +71,23 @@ pi-ai 在工具增删时会生成 `developer` 消息，**而且 DSH 平时就是
 ## 安装
 
 ```bash
-# 方式一：DSH 插件管理（推荐）
-dsh plugin --profile desktop add dsh-workbuddy-proxy
+# 方式一：DSH 插件管理（推荐）—— 走 GitHub Release 的 tarball
+dsh plugin --profile desktop add \
+  "https://github.com/0aibin0/dsh-workbuddy-proxy/releases/latest/download/dsh-workbuddy-proxy-0.1.1.tgz"
+
+# 方式一之二：走 Git（要能改源码就用这个）
+dsh plugin --profile desktop add "github:0aibin0/dsh-workbuddy-proxy#v0.1.1"
 
 # 方式二：直接从 Git 装（开发/本地）
 git clone git@github.com:0aibin0/dsh-workbuddy-proxy.git
 ```
+
+> ⚠️ **不要写裸包名** `dsh plugin --profile desktop add dsh-workbuddy-proxy`：
+> 插件管理器是按包名去 **npm registry** 找的（`ERR_PNPM_FETCH_404 ... registry.npmjs.org/...`），
+> 它拿不到包就读不到 `package.json` 里的 `dsh.install.tarball`，所以裸包名对没发过 npm 的包必然 404。
+> 要用 tarball 就直接给上面的 URL。
+
+插件管理器会把依赖写进 profile 的 `package.json`，并自动加进 `dsh.profile.bundles`。
 
 装完后在 profile 的 `package.json` 里加一行依赖，并在 `dsh.profile.bundles` 里加入插件名：
 
